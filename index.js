@@ -43,7 +43,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
 
-        await client.connect();
+        // await client.connect();
 
         const db = client.db('bloodDonation'); //create database
         const userCollections = db.collection('users'); // create a user collections
@@ -380,13 +380,10 @@ async function run() {
         })
 
         //get draft blog post and publish blog post just this api admin and volunteer
-        app.get('/blogpost',jwtToken, async (req, res) => {
-
+        app.get('/blogpost', async (req, res) => {
             const statustype = req?.query?.statustype
-
             const result = await BlogCollections.find({ status: statustype }).toArray()
             res.send(result)
-
         })
 
         // blog status update published or Draft
@@ -413,8 +410,8 @@ async function run() {
 
 
         // Send a ping to confirm a successful connection
-        await client.db("admin").command({ ping: 1 });
-        console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        // await client.db("admin").command({ ping: 1 });
+        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
