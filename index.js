@@ -3,7 +3,7 @@ const express = require('express');     // Framework to build server
 const cors = require('cors');           // Middleware to handle Cross-Origin requests
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();             // Loads environment variables from .env file
-
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 var admin = require("firebase-admin"); //token verify korar jonno firebase use kortesi 
 
 const app = express();                  // Initializes the express app
@@ -51,6 +51,7 @@ async function run() {
 
         const ConfirmedCollections = db.collection('confirmedRequest')
         const BlogCollections = db.collection('Blogs')
+        const fundCollections = db.collection('funds')
 
         const jwtToken = async (req, res, next) => {
             const verifyApiInfo = { ...req?.query }
@@ -104,6 +105,39 @@ async function run() {
             return result?.role
         }
 
+
+
+        // Create payment intent
+        app.post('/create-payment-intent', jwtToken, async (req, res) => {
+            const { amount  } = req.body;
+    
+            try {
+                const paymentIntent = await stripe.paymentIntents.create({
+                    amount,
+                    currency: 'usd',
+                    payment_method_types: ['card'],
+                });
+                res.send({
+                    clientSecret: paymentIntent.client_secret,
+                });
+            } catch (error) {
+                res.status(400).send({ error: error.message });
+            }
+        });
+
+        //save data when user donate fund
+        app.post('/saveDataWhenPayment', jwtToken, async (req,res)=>{
+            const information = req?.body
+            try {
+                const result = await fundCollections.insertOne(information)
+                res.send(result)
+            }catch (err) {
+                //
+                res.send(err.message)
+            }
+        })
+
+
         //save doner when user registrations
         app.post('/user', async (req, res) => {
             const info = req?.body
@@ -146,7 +180,7 @@ async function run() {
             }
 
         })
-        // get donationRequest Data using speceping Donar
+        // "Get donation request data using specific donor"
         app.get('/loadDontaionRequest', jwtToken, async (req, res) => {
 
             const all = req?.query?.all
@@ -177,6 +211,29 @@ async function run() {
                 }
             }
         })
+
+        //get donationREquest all Data for specific donor  
+        app.get('/LoadAllDonationMyRequest', jwtToken, async (req, res) => {
+            const email = req?.query?.email
+
+            if (email !== req?.decodedEmail?.email) {
+
+                return res.status(401).json({ message: 'Unauthorized: No token provided' });
+            }
+            const query = {}
+
+            try {
+                query.requesterEmail = email
+                const result = await DonationRequestCollections.find(query).sort({ createdAt: -1 }).toArray()
+
+                res.send(result)
+            }
+            catch (error) {
+                res.send(error)
+            }
+
+        })
+
         //get details user from usercollections
         app.get('/userdata', jwtToken, async (req, res) => {
             const email = req?.query?.email
@@ -199,17 +256,17 @@ async function run() {
         //patch user update data 
         app.patch('/updateprofile', jwtToken, async (req, res) => {
             const updateInfo = req?.body
-            const {email, upazila,blood,image,district} = updateInfo
+            const { email, upazila, blood, image, district } = updateInfo
             const query = { email }
             const document = {
-                $set : {
-                    blood : blood,
-                    district : district,
-                    upazila : upazila ,
-                    image : image
+                $set: {
+                    blood: blood,
+                    district: district,
+                    upazila: upazila,
+                    image: image
                 }
-            } 
-            const result = await userCollections.updateOne(query,document)
+            }
+            const result = await userCollections.updateOne(query, document)
             res.send(result)
         })
 
@@ -351,9 +408,9 @@ async function run() {
             if (verifyAdmin === 'Donor') {
                 return res.status(401).send({ msg: 'this api only admin' })
             }
-            const lmt = req?.params?.lim 
+            const lmt = req?.params?.lim
             const skp = req?.params?.skp
-            console.log("LIMIT",lmt, "skip",skp)
+       
             const result = await DonationRequestCollections.find().toArray()
             return res.send(result)
         })
@@ -387,7 +444,7 @@ async function run() {
         })
 
         // blog status update published or Draft
-        app.patch('/blogStatusUpdate/:id/:status',jwtToken, async (req, res) => {
+        app.patch('/blogStatusUpdate/:id/:status', jwtToken, async (req, res) => {
             const status = req?.params?.status
             const id = req?.params?.id
             const query = { _id: new ObjectId(id) }
@@ -401,9 +458,9 @@ async function run() {
         })
 
         //blog Delete 
-        app.delete('/blogDelete/:id', jwtToken, async (req,res)=>{
-            const id = req?.params?.id 
-            const query  = {_id : new ObjectId(id)}
+        app.delete('/blogDelete/:id', jwtToken, async (req, res) => {
+            const id = req?.params?.id
+            const query = { _id: new ObjectId(id) }
             const result = await BlogCollections.deleteOne(query)
             res.send(result)
         })
