@@ -1,17 +1,17 @@
 // Importing required modules
-const express = require('express');     // Framework to build server
-const cors = require('cors');           // Middleware to handle Cross-Origin requests
+const express = require('express');
+const cors = require('cors');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();             // Loads environment variables from .env file
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 var admin = require("firebase-admin"); //token verify korar jonno firebase use kortesi 
 
-const app = express();                  // Initializes the express app
-const port = process.env.PORT || 5000;  // Sets the port from .env or default 5000
+const app = express();
+const port = process.env.PORT || 5000;
 
 // Middleware setup
-app.use(cors());                        // Enables CORS for all routes
-app.use(express.json());                // Parses incoming JSON requests
+app.use(cors());
+app.use(express.json());
 
 var serviceAccount = require('./serviceAccountKey.json');
 
@@ -100,7 +100,7 @@ async function run() {
         }
 
 
-        const role = async (email) => {
+        const Getrole = async (email) => {
             const result = await userCollections.findOne({ email: email })
             return result?.role
         }
@@ -109,8 +109,8 @@ async function run() {
 
         // Create payment intent
         app.post('/create-payment-intent', jwtToken, async (req, res) => {
-            const { amount  } = req.body;
-    
+            const { amount } = req.body;
+
             try {
                 const paymentIntent = await stripe.paymentIntents.create({
                     amount,
@@ -126,12 +126,12 @@ async function run() {
         });
 
         //save data when user donate fund
-        app.post('/saveDataWhenPayment', jwtToken, async (req,res)=>{
+        app.post('/saveDataWhenPayment', jwtToken, async (req, res) => {
             const information = req?.body
             try {
                 const result = await fundCollections.insertOne(information)
                 res.send(result)
-            }catch (err) {
+            } catch (err) {
                 //
                 res.send(err.message)
             }
@@ -154,8 +154,10 @@ async function run() {
         app.get('/donor', jwtToken, async (req, res) => {
 
 
+            console.log("kire mama")
             const { blood, upazila, district, role, email } = req.query;
-            const query = { blood, upazila, district, email: { $ne: email } }
+            const query = { blood, upazila, district, role, email: { $ne: email } }
+
 
             try {
                 const result = await userCollections.find(query).toArray()
@@ -199,6 +201,10 @@ async function run() {
             if (email !== req?.decodedEmail?.email) {
                 return res.status(401).json({ message: 'Unauthorized: No token provided' });
             }
+            const getRole = await Getrole(email)
+            if (getRole === 'Admin') {
+                return res.status(401).json({ message: 'Unauthorized: No token provided' });
+            }
             const query = {}
             if (email) {
                 try {
@@ -217,7 +223,10 @@ async function run() {
             const email = req?.query?.email
 
             if (email !== req?.decodedEmail?.email) {
-
+                return res.status(401).json({ message: 'Unauthorized: No token provided' });
+            }
+            const getRole = await Getrole(email)
+            if (getRole === 'Admin') {
                 return res.status(401).json({ message: 'Unauthorized: No token provided' });
             }
             const query = {}
@@ -308,12 +317,11 @@ async function run() {
         //get all donors  , users , volunteer , and Total request
         app.get('/allDonors', jwtToken, async (req, res) => {
 
-
             const adminemail = req?.query?.email
             if (req?.decodedEmail?.email !== adminemail) {
                 return res.status(401).send({ msg: 'unauthorized Token' })
             }
-            const verifyAdmin = await role(adminemail)
+            const verifyAdmin = await Getrole(adminemail)
             if (verifyAdmin === 'Donor') {
                 return res.send({ msg: "this api only see admin" })
             }
@@ -357,6 +365,11 @@ async function run() {
             if (req?.decodedEmail?.email !== email) {
                 return res.status(401).send({ msg: 'unauthorized user' })
             }
+            const getRole = await Getrole(email)
+
+            if (getRole !== 'Admin') {
+                return res.status(401).send({ msg: 'unauthorized user' })
+            }
             const result = await userCollections.find({ email: { $ne: email } }).toArray()
             res.send(result)
         })
@@ -398,19 +411,19 @@ async function run() {
 
 
         //All  Donation  Request For Admin 
-        app.get('/allRequestList/:email/:lim/:skp', jwtToken, async (req, res) => {
+        app.get('/allRequestList/:email', jwtToken, async (req, res) => {
             const email = req?.params?.email
             if (req?.decodedEmail.email !== email) {
                 return res.status(401).send({ msg: 'this api only admin' })
             }
-            const verifyAdmin = await role(email)
+            const verifyAdmin = await Getrole(email)
 
             if (verifyAdmin === 'Donor') {
                 return res.status(401).send({ msg: 'this api only admin' })
             }
             const lmt = req?.params?.lim
             const skp = req?.params?.skp
-       
+
             const result = await DonationRequestCollections.find().toArray()
             return res.send(result)
         })
@@ -443,6 +456,8 @@ async function run() {
             res.send(result)
         })
 
+
+
         // blog status update published or Draft
         app.patch('/blogStatusUpdate/:id/:status', jwtToken, async (req, res) => {
             const status = req?.params?.status
@@ -465,6 +480,35 @@ async function run() {
             res.send(result)
         })
 
+        //get fund api 
+        app.get('/loadFund', jwtToken, async (req, res) => {
+            const result = await fundCollections.find().toArray()
+            res.send(result)
+        })
+
+        //blog details 
+        app.get('/showBlogDetails/:id', async (req, res) => {
+            const id = req?.params?.id
+            const query = { _id: new ObjectId(id) }
+
+            const result = await BlogCollections.findOne(query)
+
+            res.send(result)
+        })
+
+
+        //put request 
+
+        app.put('/donationRequestUpdate', jwtToken, async (req, res) => {
+            const info = req.body;
+            const { id } = info;
+            const query = { _id: new ObjectId(id) };
+            const updatedDoc = {
+                $set: info
+            };
+            const result = await DonationRequestCollections.updateOne(query, updatedDoc);
+            res.send(result);
+        });
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
