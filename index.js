@@ -1,6 +1,7 @@
 // Importing required modules
 const express = require('express');
 const cors = require('cors');
+const nodemailer = require("nodemailer");
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 require('dotenv').config();             // Loads environment variables from .env file
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
@@ -31,11 +32,15 @@ const client = new MongoClient(uri, {
     }
 });
 
-// Todo : 
-// . Jwt
-// .roleMiddle ware (Admin,donor,volunteer)
-// .deploy
 
+const emailTrasporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+
+        user: process.env.transporterEmail,
+        pass: process.env.app_password
+    },
+})
 
 
 
@@ -43,7 +48,7 @@ const client = new MongoClient(uri, {
 async function run() {
     try {
 
-        // await client.connect();
+        await client.connect();
 
         const db = client.db('bloodDonation'); //create database
         const userCollections = db.collection('users'); // create a user collections
@@ -315,6 +320,40 @@ async function run() {
         })
 
         //get all donors  , users , volunteer , and Total request
+
+        const getBloodGroupe = async (group) => {
+
+            const result = await DonationRequestCollections.find({ bloodGroup: group }).toArray()
+
+            return result?.length
+        }
+
+        const getuserActiveAndBlocked = async (status, adminemail) => {
+            const result = await userCollections
+                .find({
+                    status: status,
+                    email: { $ne: adminemail }
+                })
+                .toArray();
+
+            return result.length;
+        };
+
+        const getDonorsImage = async (role) => {
+            const storeImg = []
+            const result = await userCollections.find({ role: role }).toArray()
+            for (let i = 0; i < result.length; i++) {
+                if (result[i].image) {
+                    storeImg.push({ id : i+1,  image: result[i].image })
+                }
+            }
+            if (storeImg?.length > 5) {
+                const sliceImage = storeImg.slice(0, 5)
+            
+                return sliceImage
+            }
+            return storeImg
+        }
         app.get('/allDonors', jwtToken, async (req, res) => {
 
             const adminemail = req?.query?.email
@@ -330,8 +369,42 @@ async function run() {
             const result = await userCollections.find({ role: 'Donor' }).toArray()
             const volunteer = await userCollections.find({ role: 'Volunteer' }).toArray()
             const request = await DonationRequestCollections.find().toArray()
-            res.send({ donors: result?.length, volunteer: volunteer?.length, user: user?.length, request: request?.length })
+            const AllBloodGroupe = ['A+', 'B+', 'A-', 'B-', 'AB+', 'AB-', 'O+', 'O-']
+            const storeBloodGroupAndLenght = []
+
+            for (let i = 0; i < AllBloodGroupe.length; i++) {
+                const result = await getBloodGroupe(AllBloodGroupe[i])
+                const readyForPush = { id: i, bloodName: AllBloodGroupe[i], count: result }
+                storeBloodGroupAndLenght.push(readyForPush)
+            }
+
+
+            const userStatus = ['Active', 'Blocked']
+            const storeUserStatus = []
+            for (let i = 0; i < userStatus.length; i++) {
+                const result = await getuserActiveAndBlocked(userStatus[i], adminemail)
+
+                const finalResult = { id: i, count: result, status: userStatus[i] }
+                storeUserStatus.push(finalResult)
+            }
+
+            const allDonorsImage = await getDonorsImage('Donor')
+            const allVolunTeerImage = await getDonorsImage('Volunteer')
+      
+            res.send({
+                donors: result?.length,
+                volunteer: volunteer?.length,
+                user: user?.length,
+                request: request?.length,
+                storeBloodGroupAndLenght,
+                storeUserStatus,
+                allDonorsImage,
+                allVolunTeerImage
+            })
         })
+        //end this  api 
+
+
 
 
         //save data when user(Donor) click on the confirmed button
@@ -511,8 +584,8 @@ async function run() {
         });
 
         // Send a ping to confirm a successful connection
-        // await client.db("admin").command({ ping: 1 });
-        // console.log("Pinged your deployment. You successfully connected to MongoDB!");
+        await client.db("admin").command({ ping: 1 });
+        console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
         // Ensures that the client will close when you finish/error
         // await client.close();
