@@ -23,7 +23,7 @@ admin.initializeApp({
 
 const uri = `mongodb+srv://${process.env.db_name}:${process.env.db_pass}@cluster0.ws0fker.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+
 const client = new MongoClient(uri, {
     serverApi: {
         version: ServerApiVersion.v1,
@@ -344,14 +344,10 @@ async function run() {
             const result = await userCollections.find({ role: role }).toArray()
             for (let i = 0; i < result.length; i++) {
                 if (result[i].image) {
-                    storeImg.push({ id : i+1,  image: result[i].image })
+                    storeImg.push({ id: i + 1, image: result[i].image })
                 }
             }
-            if (storeImg?.length > 5) {
-                const sliceImage = storeImg.slice(0, 5)
-            
-                return sliceImage
-            }
+
             return storeImg
         }
         app.get('/allDonors', jwtToken, async (req, res) => {
@@ -390,7 +386,7 @@ async function run() {
 
             const allDonorsImage = await getDonorsImage('Donor')
             const allVolunTeerImage = await getDonorsImage('Volunteer')
-      
+
             res.send({
                 donors: result?.length,
                 volunteer: volunteer?.length,
@@ -569,9 +565,7 @@ async function run() {
             res.send(result)
         })
 
-
         //put request 
-
         app.put('/donationRequestUpdate', jwtToken, async (req, res) => {
             const info = req.body;
             const { id } = info;
@@ -582,6 +576,28 @@ async function run() {
             const result = await DonationRequestCollections.updateOne(query, updatedDoc);
             res.send(result);
         });
+
+
+        app.get('/allDonorsForPublic', async (req, res) => {
+
+            const result = await userCollections.find({
+                role: 'Donor',
+                image: { $exists: true, $ne: null, $ne: "" }
+            }).toArray();
+
+            const resultVoluteen = await userCollections.find({
+                role: 'Volunteer',
+                image: { $exists: true, $ne: null, $ne: "" }
+            }).toArray();
+      
+            if (result?.length && result?.length > 10) {
+                return res.send(result.slice(0, 10))
+            }
+            res.send({result, resultVoluteen})
+        })
+
+
+
 
         // Send a ping to confirm a successful connection
         // await client.db("admin").command({ ping: 1 });
