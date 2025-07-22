@@ -156,9 +156,9 @@ async function run() {
         })
 
         //get donor when user will be search
-        app.get('/donor', jwtToken, async (req, res) => {
-            const { blood, upazila, district, role, email } = req.query;
-            const query = { blood, upazila, district, role, email: { $ne: email } }
+        app.get('/donor', async (req, res) => {
+            const { blood, upazila, district, role } = req.query;
+            const query = { blood, upazila, district, role }
             try {
                 const result = await userCollections.find(query).toArray()
                 res.send(result)
