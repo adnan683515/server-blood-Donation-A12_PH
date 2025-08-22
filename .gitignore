@@ -1,5 +1,7 @@
 .env
 serviceAccountKey.json
+temp_auto_push.bat
 node_modules
 .vercel
-problem.js
+problem.js.gitignore
+temp_interactive_push.bat
